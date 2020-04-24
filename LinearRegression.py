@@ -9,7 +9,9 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 from math import sqrt
-rainfall=pd.read_csv(r'C:\Users\Siddharth\Desktop\BITS\3 2\DM\project\Sub_Division_IMD_2017.csv')
+import os
+x=os.getcwd()
+rainfall=pd.read_csv(x+'/Sub_Division_IMD_2017.csv')
 
 
 ###Calculate Mean of a column
@@ -102,37 +104,84 @@ def cal_rmse(actual_readings, predicted_readings):
  
  
 ###Load the data
-tn_df = rainfall[rainfall['SUBDIVISION'] == 'Tamil Nadu']
-months = ['SUBDIVISION', 'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC', 'JF', 'MAM', 'JJAS', 'OND']
-tn_df=tn_df.drop(months, axis=1)
-melted = tn_df.melt('YEAR').reset_index()
 
-###Arrange by years
-df = melted[['YEAR','variable','value']].reset_index().sort_values(by=['YEAR','index'])
+x = rainfall.SUBDIVISION
+states=[]
+
+for i in range(len(x)):
+    if x[i] not in states:
+        states.append(x[i])
+
+###list of state dataframes
+l_state_dfs = []
+
+for i in range(len(states)):
+    n=g[i]
+    x=rf_data[rf_data.SUBDIVISION == n]
+    l_state_dfs.append(x)
+
+###create list of columns to drop
+months = ['SUBDIVISION', 'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC', 'JF', 'MAM', 'JJAS', 'OND']
+
+###drop the columns for all dataframes and melt
+for i in range(len(states)):
+    l_state_dfs[i]=l_state_dfs[i].drop(months, axis=1)
+    l_state_dfs[i] = l_state_dfs[i].melt('YEAR').reset_index()
+
+###Remove nans (loop through states and replace with annual mean)
+for i in range(len(states)):
+    mean_of_state=l_state_dfs[i].value.mean()
+    l_state_dfs[i].value = l_state_dfs[i].value.fillna(mean_of_state)
+
+
+###normalize annual rainfall
+na=[]
+for i in range(len(states)):
+    a=min(l_state_dfs[i].value)
+    b=max(l_state_dfs[i].value)
+    
+    for j in range(len(l_state_dfs[i].value)):
+        u = (l_state_dfs[i]['value'][j]-a)/(b -a)
+        na.append(u)
+    
+    l_state_dfs[i].drop(['value'],axis=1)
+    l_state_dfs[i]['value'] = na
+    na = []
 
 ###Use functions defined to perform linear regression
-mean = cal_mean(df['value'])
 
-yrs = df['YEAR']
-
-
-# Calculating the mean of the years and the annual rainfall
-years_mean = cal_mean(df['YEAR'])
-rainfall_mean = cal_mean(df['value'])
-
-
-years_variance = cal_variance(df['YEAR'])
-rainfall_variance = cal_variance(df['value'])
-
-# Calculating the regression
-covariance_of_rainfall_and_years = df.cov()['YEAR']['value']
-w1 = covariance_of_rainfall_and_years / float(years_variance)
- 
-w0 = rainfall_mean - (w1 * years_mean)
- 
-# Predictions
-df['Predicted_Rainfall'] = w0 + w1 * df['YEAR']
-
-
-plt.plot(df['YEAR'], df['value'])
-plt.plot(df['YEAR'], df['Predicted_Price'])
+for i in range(len(states)):
+    mean = cal_mean(l_state_dfs[i]['value'])
+    
+    yrs = l_state_dfs[i]['YEAR']
+    
+    
+    # Calculating the mean of the years and the annual rainfall
+    years_mean = cal_mean(l_state_dfs[i]['YEAR'])
+    rainfall_mean = cal_mean(l_state_dfs[i]['value'])
+    
+    
+    years_variance = cal_variance(l_state_dfs[i]['YEAR'])
+    rainfall_variance = cal_variance(l_state_dfs[i]['value'])
+    
+    # Calculating the regression
+    covariance_of_rainfall_and_years = l_state_dfs[i].cov()['YEAR']['value']
+    w1 = covariance_of_rainfall_and_years / float(years_variance)
+     
+    w0 = rainfall_mean - (w1 * years_mean)
+     
+    # Predictions
+    l_state_dfs[i]['Predicted_Rainfall'] = w0 + w1 * l_state_dfs[i]['YEAR']
+    
+    ###plot
+    plt.figure()
+    plt.plot(l_state_dfs[i]['YEAR'], l_state_dfs[i]['value'])
+    plt.plot(l_state_dfs[i]['YEAR'], l_state_dfs[i]['Predicted_Rainfall'])
+    
+    ###convert annual rainfall back to mm
+    na=[]
+    for j in range(len(l_state_dfs[i].value)):
+        u=l_state_dfs[i]['Predicted_Rainfall'][j]*(b -a)+a 
+        na.append(u)
+    l_state_dfs[i].drop(['Predicted_Rainfall'],axis=1)
+    l_state_dfs[i]['Predicted_Rainfall'] = na
